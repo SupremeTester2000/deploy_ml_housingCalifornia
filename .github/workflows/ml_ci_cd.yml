@@ -29,6 +29,120 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
 
+      - name: Download and validate dispatch dataset
+        id: dataset
+        if: github.event_name == 'repository_dispatch'
+        env:
+          DATASET_URL: ${{ github.event.client_payload.dataseturl }}
+          IMAGE_TAG: ${{ github.event.client_payload.sha }}
+        run: |
+          python - <<'PY'
+          import os
+          import re
+          import tempfile
+          from pathlib import Path
+          from urllib.error import HTTPError
+          from urllib.parse import urlparse
+          from urllib.request import HTTPRedirectHandler, Request, build_opener
+
+          import pandas as pd
+
+          def validate_url(url):
+              parsed = urlparse(url)
+              if (
+                  parsed.scheme != "https"
+                  or parsed.hostname != "res.cloudinary.com"
+                  or parsed.port not in (None, 443)
+                  or parsed.username
+                  or parsed.password
+                  or parsed.fragment
+                  or not parsed.path.lower().endswith(".csv")
+                  or parsed.path.split("/")[1:2] != ["doexahadj"]
+              ):
+                  raise ValueError(
+                      "Dataset URL must be an HTTPS CSV hosted in Cloudinary "
+                      "cloud doexahadj."
+                  )
+
+          dataset_url = os.environ["DATASET_URL"]
+          image_tag = os.environ["IMAGE_TAG"]
+          if not dataset_url:
+              raise ValueError("repository_dispatch requires client_payload.dataseturl.")
+          if not image_tag or not re.fullmatch(
+              r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}", image_tag
+          ):
+              raise ValueError(
+                  "client_payload.sha must be a valid Docker tag (1-128 characters)."
+              )
+          validate_url(dataset_url)
+
+          class CloudinaryRedirectHandler(HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  validate_url(newurl)
+                  return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+          destination = Path("data/california_housing.csv")
+          destination.parent.mkdir(parents=True, exist_ok=True)
+          temporary_path = None
+          try:
+              request = Request(
+                  dataset_url, headers={"User-Agent": "deploy-ml-github-actions"}
+              )
+              opener = build_opener(CloudinaryRedirectHandler)
+              with opener.open(request, timeout=30) as response:
+                  with tempfile.NamedTemporaryFile(
+                      dir=destination.parent, delete=False
+                  ) as downloaded:
+                      temporary_path = Path(downloaded.name)
+                      size = 0
+                      while chunk := response.read(1024 * 1024):
+                          size += len(chunk)
+                          if size > 100 * 1024 * 1024:
+                              raise ValueError("Dataset exceeds the 100 MiB download limit.")
+                          downloaded.write(chunk)
+
+              required_columns = {
+                  "longitude",
+                  "latitude",
+                  "housing_median_age",
+                  "total_rooms",
+                  "total_bedrooms",
+                  "population",
+                  "households",
+                  "median_income",
+                  "median_house_value",
+              }
+              dataset = pd.read_csv(temporary_path)
+              missing_columns = required_columns.difference(dataset.columns)
+              if missing_columns:
+                  raise ValueError(
+                      "Downloaded file is not a compatible California Housing CSV; "
+                      f"missing columns: {', '.join(sorted(missing_columns))}."
+                  )
+              numeric_columns = required_columns
+              if any(
+                  not pd.api.types.is_numeric_dtype(dataset[column])
+                  for column in numeric_columns
+              ):
+                  raise ValueError("Required feature and target columns must be numeric.")
+              if len(dataset.dropna()) < 2:
+                  raise ValueError(
+                      "Dataset must contain at least two complete rows for training."
+                  )
+
+              temporary_path.replace(destination)
+              with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+                  output.write(f"image_tag={image_tag}\n")
+              print(f"Validated and installed dispatch dataset ({len(dataset)} rows).")
+          except HTTPError as error:
+              raise RuntimeError(
+                  f"Cloudinary returned HTTP {error.code} while downloading the dataset."
+              ) from error
+          finally:
+              if temporary_path is not None:
+                  temporary_path.unlink(missing_ok=True)
+          PY
+
       - name: Train model
         run: python model/train.py
 
@@ -49,7 +163,7 @@ jobs:
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && steps.docker_credentials.outputs.available == 'true'
         env:
           IMAGE_NAME: ${{ secrets.DOCKER_USER }}/${{ secrets.MODEL_NAME }}
-          IMAGE_TAG: ${{ github.sha }}
+          IMAGE_TAG: ${{ github.event_name == 'repository_dispatch' && steps.dataset.outputs.image_tag || github.sha }}
         run: docker build --tag "${IMAGE_NAME}:${IMAGE_TAG}" .
 
       - name: Log in to Docker Hub
@@ -63,5 +177,5 @@ jobs:
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && steps.docker_credentials.outputs.available == 'true'
         env:
           IMAGE_NAME: ${{ secrets.DOCKER_USER }}/${{ secrets.MODEL_NAME }}
-          IMAGE_TAG: ${{ github.sha }}
+          IMAGE_TAG: ${{ github.event_name == 'repository_dispatch' && steps.dataset.outputs.image_tag || github.sha }}
         run: docker push "${IMAGE_NAME}:${IMAGE_TAG}"
