@@ -31,3 +31,37 @@ jobs:
 
       - name: Train model
         run: python model/train.py
+
+      - name: Check Docker Hub credentials
+        id: docker_credentials
+        env:
+          DOCKER_USER: ${{ secrets.DOCKER_USER }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+          MODEL_NAME: ${{ secrets.MODEL_NAME }}
+        run: |
+          if [ -n "$DOCKER_USER" ] && [ -n "$DOCKER_PASSWORD" ] && [ -n "$MODEL_NAME" ]; then
+            printf 'available=true\n' >> "$GITHUB_OUTPUT"
+          else
+            printf 'available=false\n' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build Docker image
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && steps.docker_credentials.outputs.available == 'true'
+        env:
+          IMAGE_NAME: ${{ secrets.DOCKER_USER }}/${{ secrets.MODEL_NAME }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: docker build --tag "${IMAGE_NAME}:${IMAGE_TAG}" .
+
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && steps.docker_credentials.outputs.available == 'true'
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKER_USER }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Push Docker image
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && steps.docker_credentials.outputs.available == 'true'
+        env:
+          IMAGE_NAME: ${{ secrets.DOCKER_USER }}/${{ secrets.MODEL_NAME }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: docker push "${IMAGE_NAME}:${IMAGE_TAG}"
