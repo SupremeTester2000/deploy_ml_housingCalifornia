@@ -1,0 +1,27 @@
+name: ModelOps Deploy
+
+on:
+  push:
+    branches: [main]
+
+  pull_request:
+    branches: [main]
+
+  repository_dispatch:
+    types: [ml_ci_cd]
+
+jobs:
+  ml_ci_cd:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Show Python version
+        run: python --version
