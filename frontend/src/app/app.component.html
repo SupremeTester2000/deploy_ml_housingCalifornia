@@ -1,0 +1,370 @@
+<header class="site-header">
+  <div class="header-inner">
+    <a class="brand" href="#" aria-label="California Housing ML, inicio">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 32 32" fill="none">
+          <path d="M5 15.2 16 6l11 9.2v11.3H5V15.2Z" />
+          <path d="M12 26.5v-8h8v8M10 14h.01M16 14h.01M22 14h.01" />
+        </svg>
+      </span>
+      <span class="brand-copy">
+        <strong>California Housing <span>ML</span></strong>
+        <small>ModelOps · Regresión inmobiliaria</small>
+      </span>
+    </a>
+
+    <div class="header-actions">
+      <div
+        class="api-indicator"
+        [class.is-online]="apiStatus === 'online'"
+        [class.is-offline]="apiStatus === 'offline'"
+        aria-live="polite"
+      >
+        <span class="status-dot" aria-hidden="true"></span>
+        <span>
+          {{
+            apiStatus === 'checking'
+              ? 'Conectando con la API'
+              : apiStatus === 'online'
+                ? 'API conectada'
+                : 'API sin conexión'
+          }}
+        </span>
+      </div>
+      <button
+        class="icon-button"
+        type="button"
+        aria-label="Comprobar conexión con la API"
+        title="Comprobar conexión"
+        (click)="checkApi()"
+      >
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M20 7v5h-5M4 17v-5h5" />
+          <path d="M5.6 9a7 7 0 0 1 11.6-2L20 12M4 12l2.8 5a7 7 0 0 0 11.6-2" />
+        </svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="hero-content">
+      <p class="eyebrow"><span class="eyebrow-line"></span> California · Machine Learning</p>
+      <h1>Una nueva perspectiva<br />sobre el valor de <em>vivir.</em></h1>
+      <p class="hero-description">
+        Explora el valor estimado de una vivienda y gestiona la evolución del modelo,
+        con un flujo conectado de principio a fin.
+      </p>
+      <a class="hero-link" href="#prediccion">
+        Explorar el predictor
+        <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <path d="M4 10h12m-5-5 5 5-5 5" />
+        </svg>
+      </a>
+    </div>
+    <div class="hero-art" aria-hidden="true">
+      <div class="sun-disc"></div>
+      <div class="hill hill-back"></div>
+      <div class="hill hill-front"></div>
+      <div class="hero-grid"></div>
+      <span class="art-label">36° 46' 49.8" N<br />119° 25' 58.2" W</span>
+      <span class="art-sparkle sparkle-one">✳</span>
+      <span class="art-sparkle sparkle-two">✳</span>
+    </div>
+    <div class="hero-bottom">
+      <span>01 — Predice</span>
+      <span>02 — Reentrena</span>
+      <span>Un modelo · Nuevas posibilidades</span>
+    </div>
+  </section>
+
+  <section id="prediccion" class="content-section prediction-section">
+    <div class="section-heading">
+      <div>
+        <p class="section-kicker">01 / Estimación</p>
+        <h2>Predice un valor de vivienda</h2>
+        <p class="section-description">
+          Completa las características del distrito para obtener una estimación del modelo.
+        </p>
+      </div>
+      <div class="model-badge">
+        <span class="badge-dot"></span>
+        Modelo California Housing
+      </div>
+    </div>
+
+    <div class="prediction-layout">
+      <form class="prediction-card" [formGroup]="predictionForm" (ngSubmit)="predict()" novalidate>
+        <div class="card-topline">
+          <div>
+            <h3>Características del distrito</h3>
+            <p>Todos los campos son necesarios</p>
+          </div>
+          <span class="field-count">8 variables</span>
+        </div>
+
+        <div class="field-grid">
+          <div class="field">
+            <label for="longitude">Longitud <span>°</span></label>
+            <input id="longitude" type="number" step="any" min="-180" max="180" formControlName="longitude" placeholder="−122.23" />
+            @if (predictionForm.controls.longitude.touched && predictionForm.controls.longitude.invalid) {
+              <span class="field-error">Ingresa una longitud entre −180 y 180.</span>
+            }
+          </div>
+          <div class="field">
+            <label for="latitude">Latitud <span>°</span></label>
+            <input id="latitude" type="number" step="any" min="-90" max="90" formControlName="latitude" placeholder="37.88" />
+            @if (predictionForm.controls.latitude.touched && predictionForm.controls.latitude.invalid) {
+              <span class="field-error">Ingresa una latitud entre −90 y 90.</span>
+            }
+          </div>
+          <div class="field">
+            <label for="housing_median_age">Antigüedad mediana <span>años</span></label>
+            <input id="housing_median_age" type="number" step="any" min="0" formControlName="housing_median_age" placeholder="41" />
+            @if (predictionForm.controls.housing_median_age.touched && predictionForm.controls.housing_median_age.invalid) {
+              <span class="field-error">Ingresa una antigüedad igual o mayor que cero.</span>
+            }
+          </div>
+          <div class="field">
+            <label for="total_rooms">Total de habitaciones <span>unidades</span></label>
+            <input id="total_rooms" type="number" step="any" min="0" formControlName="total_rooms" placeholder="880" />
+            @if (predictionForm.controls.total_rooms.touched && predictionForm.controls.total_rooms.invalid) {
+              <span class="field-error">Ingresa un total igual o mayor que cero.</span>
+            }
+          </div>
+          <div class="field">
+            <label for="total_bedrooms">Total de dormitorios <span>unidades</span></label>
+            <input id="total_bedrooms" type="number" step="any" min="0" formControlName="total_bedrooms" placeholder="129" />
+            @if (predictionForm.controls.total_bedrooms.touched && predictionForm.controls.total_bedrooms.invalid) {
+              <span class="field-error">Ingresa un total igual o mayor que cero.</span>
+            }
+          </div>
+          <div class="field">
+            <label for="population">Población <span>personas</span></label>
+            <input id="population" type="number" step="any" min="0" formControlName="population" placeholder="322" />
+            @if (predictionForm.controls.population.touched && predictionForm.controls.population.invalid) {
+              <span class="field-error">Ingresa una población igual o mayor que cero.</span>
+            }
+          </div>
+          <div class="field">
+            <label for="households">Hogares <span>unidades</span></label>
+            <input id="households" type="number" step="any" min="0" formControlName="households" placeholder="126" />
+            @if (predictionForm.controls.households.touched && predictionForm.controls.households.invalid) {
+              <span class="field-error">Ingresa un total igual o mayor que cero.</span>
+            }
+          </div>
+          <div class="field">
+            <label for="median_income">Ingreso mediano <span>decenas de miles USD</span></label>
+            <input id="median_income" type="number" step="any" min="0" formControlName="median_income" placeholder="8.33" />
+            @if (predictionForm.controls.median_income.touched && predictionForm.controls.median_income.invalid) {
+              <span class="field-error">Ingresa un ingreso igual o mayor que cero.</span>
+            }
+          </div>
+        </div>
+
+        @if (predictionError) {
+          <p class="alert alert-error" role="alert">{{ predictionError }}</p>
+        }
+
+        <div class="form-footer">
+          <p class="privacy-note">
+            <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <path d="M10 2.5 4 5v4.3c0 3.8 2.6 6.7 6 8.2 3.4-1.5 6-4.4 6-8.2V5l-6-2.5Z" />
+              <path d="m7.5 10 1.7 1.7 3.5-3.5" />
+            </svg>
+            Los datos se procesan en la API del proyecto.
+          </p>
+          <button class="button button-primary" type="submit" [disabled]="isPredicting">
+            @if (isPredicting) {
+              <span class="spinner" aria-hidden="true"></span>
+              Calculando…
+            } @else {
+              Predecir valor de vivienda
+              <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <path d="M4 10h12m-5-5 5 5-5 5" />
+              </svg>
+            }
+          </button>
+        </div>
+      </form>
+
+      <aside class="result-card" aria-live="polite">
+        <div class="result-orbit orbit-one"></div>
+        <div class="result-orbit orbit-two"></div>
+        <div class="result-content">
+          <span class="result-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M12 3v18M17 7.5c0-1.7-2.2-3-5-3s-5 1.3-5 3 2.2 3 5 3 5 1.3 5 3-2.2 3-5 3-5-1.3-5-3" />
+            </svg>
+          </span>
+          <p class="result-label">Tu estimación</p>
+          @if (prediction !== null) {
+            <p class="result-value">{{ formatCurrency.format(prediction) }}</p>
+            <p class="result-caption">Valor mediano estimado · USD</p>
+          } @else if (isPredicting) {
+            <p class="result-placeholder result-loading">Preparando estimación<span>…</span></p>
+            <p class="result-caption">El modelo está procesando los datos</p>
+          } @else {
+            <p class="result-placeholder">El valor aparecerá aquí</p>
+            <p class="result-caption">Completa las ocho características para comenzar</p>
+          }
+          <div class="result-divider"></div>
+          <p class="result-footnote">Estimación generada por el modelo de regresión</p>
+        </div>
+        <span class="result-decoration" aria-hidden="true">CA</span>
+      </aside>
+    </div>
+  </section>
+
+  <section id="administracion" class="content-section administration-section">
+    <div class="admin-intro">
+      <p class="section-kicker">02 / Ciclo de vida del modelo</p>
+      <h2>Administración del modelo</h2>
+      <p class="section-description">
+        Selecciona una versión del dataset para iniciar un nuevo entrenamiento automatizado.
+      </p>
+      <div class="workflow-link">
+        <span class="workflow-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M8 6.5a2.5 2.5 0 1 0 0 .1M16 17.5a2.5 2.5 0 1 0 0 .1M8 9v4a4.5 4.5 0 0 0 4.5 4.5H13M16 15V11a4.5 4.5 0 0 0-4.5-4.5H11" />
+          </svg>
+        </span>
+        <span>
+          <strong>Pipeline de reentrenamiento</strong>
+          <small>GitHub Actions · Docker Hub</small>
+        </span>
+        <a
+          href="https://github.com/SupremeTester2000/deploy_ml_housingCalifornia/actions"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Consultar ejecuciones de GitHub Actions (se abre en una pestaña nueva)"
+        >
+          Ver ejecuciones
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path d="M11 4h5v5M16 4l-7 7" />
+            <path d="M14 11v4a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h4" />
+          </svg>
+        </a>
+      </div>
+    </div>
+
+    <form class="admin-card" [formGroup]="retrainForm" (ngSubmit)="requestRetraining()" novalidate>
+      <div class="admin-card-heading">
+        <span class="admin-step">A</span>
+        <div>
+          <h3>Configura el reentrenamiento</h3>
+          <p>El proceso se ejecutará de forma segura en GitHub Actions.</p>
+        </div>
+      </div>
+
+      <fieldset class="dataset-fieldset">
+        <legend>Porcentaje del dataset</legend>
+        <div class="dataset-options">
+          @for (option of datasetOptions; track option.percentage) {
+            <label
+              class="dataset-option"
+              [class.option-selected]="retrainForm.controls.percentage.value === option.percentage"
+            >
+              <input
+                type="radio"
+                name="percentage"
+                [value]="option.percentage"
+                formControlName="percentage"
+              />
+              <span class="radio-mark" aria-hidden="true"></span>
+              <span class="option-copy">
+                <strong>{{ option.label }}</strong>
+                <small>{{ option.records }}</small>
+              </span>
+              <span class="option-arrow" aria-hidden="true">↗</span>
+            </label>
+          }
+        </div>
+        @if (retrainForm.controls.percentage.touched && retrainForm.controls.percentage.invalid) {
+          <span class="field-error">Selecciona el tamaño del dataset.</span>
+        }
+      </fieldset>
+
+      <div class="token-field">
+        <label for="operator-token">Credencial de operador</label>
+        <p>Solicítala al administrador del servicio. Debe tener al menos 32 caracteres; no se guarda en el navegador.</p>
+        <div class="token-input-wrap">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <rect x="3.5" y="8.5" width="13" height="9" rx="1.5" />
+            <path d="M6.5 8.5v-3a3.5 3.5 0 0 1 7 0v3M10 12v2" />
+          </svg>
+          <input
+            id="operator-token"
+            type="password"
+            formControlName="operatorToken"
+            autocomplete="off"
+            placeholder="Introduce la credencial de administración"
+          />
+        </div>
+        @if (retrainForm.controls.operatorToken.touched && retrainForm.controls.operatorToken.hasError('required')) {
+          <span class="field-error">La credencial de operador es necesaria.</span>
+        } @else if (retrainForm.controls.operatorToken.touched && retrainForm.controls.operatorToken.hasError('minlength')) {
+          <span class="field-error">La credencial debe tener al menos 32 caracteres.</span>
+        }
+      </div>
+
+      @if (retrainMessage) {
+        <div
+          class="alert"
+          [class.alert-error]="retrainError"
+          [class.alert-success]="!retrainError"
+          role="status"
+          aria-live="polite"
+        >
+          <span class="alert-mark" aria-hidden="true">{{ retrainError ? '!' : '✓' }}</span>
+          <span>
+            {{ retrainMessage }}
+            @if (imageTag) {
+              <strong class="tag-result">Etiqueta solicitada: {{ imageTag }}</strong>
+            }
+          </span>
+        </div>
+      }
+
+      <div class="admin-submit-row">
+        <p>
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path d="M10 2.5 4 5v4.3c0 3.8 2.6 6.7 6 8.2 3.4-1.5 6-4.4 6-8.2V5l-6-2.5Z" />
+            <path d="m7.5 10 1.7 1.7 3.5-3.5" />
+          </svg>
+          Tu credencial solo se usa para autorizar esta solicitud.
+        </p>
+        <button class="button button-dark" type="submit" [disabled]="isRetraining">
+          @if (isRetraining) {
+            <span class="spinner" aria-hidden="true"></span>
+            Enviando solicitud…
+          } @else {
+            Iniciar reentrenamiento
+            <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <path d="M4 10h12m-5-5 5 5-5 5" />
+            </svg>
+          }
+        </button>
+      </div>
+      <p class="dispatch-note">
+        La confirmación indica que GitHub aceptó el evento. El entrenamiento y la publicación
+        continúan en el workflow.
+      </p>
+    </form>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="footer-inner">
+    <a class="footer-brand" href="#">
+      <span class="footer-mark" aria-hidden="true">CA</span>
+      <span>California Housing <strong>ML</strong></span>
+    </a>
+    <p>Proyecto académico de Machine Learning y MLOps</p>
+    <div class="technology-list" aria-label="Tecnologías utilizadas">
+      <span>Angular</span><i></i><span>FastAPI</span><i></i><span>GitHub Actions</span><i></i><span>Docker</span>
+    </div>
+    <span class="footer-year">California · 2026</span>
+  </div>
+</footer>
