@@ -250,7 +250,7 @@ jobs:
         env:
           IMAGE_TAG: ${{ github.event_name == 'repository_dispatch' && steps.dataset.outputs.image_tag || github.sha }}
         run: |
-          docker run --rm "california-housing-ml:${IMAGE_TAG}" python - <<'PY'
+          docker run --rm -i "california-housing-ml:${IMAGE_TAG}" python - <<'PY'
           import joblib
           import math
           import pandas as pd
