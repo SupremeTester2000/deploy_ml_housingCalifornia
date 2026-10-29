@@ -1,3 +1,4 @@
+
 name: ModelOps Deploy
 
 on:
@@ -9,6 +10,9 @@ on:
 
   repository_dispatch:
     types: [ml_ci_cd]
+
+permissions:
+  contents: read
 
 jobs:
   ml_ci_cd:
@@ -22,12 +26,15 @@ jobs:
         uses: actions/setup-python@v7
         with:
           python-version: '3.12'
+          architecture: x64
+          cache: pip
+          cache-dependency-path: requirements.txt
 
       - name: Show Python version
         run: python --version
 
       - name: Install dependencies
-        run: python -m pip install -r requirements.txt
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
 
       - name: Download and validate dispatch dataset
         id: dataset
@@ -66,39 +73,56 @@ jobs:
 
           dataset_url = os.environ["DATASET_URL"]
           image_tag = os.environ["IMAGE_TAG"]
+
           if not dataset_url:
-              raise ValueError("repository_dispatch requires client_payload.dataseturl.")
+              raise ValueError(
+                  "repository_dispatch requires client_payload.dataseturl."
+              )
+
           if not image_tag or not re.fullmatch(
               r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}", image_tag
           ):
               raise ValueError(
-                  "client_payload.sha must be a valid Docker tag (1-128 characters)."
+                  "client_payload.sha must be a valid Docker tag."
               )
+
           validate_url(dataset_url)
 
           class CloudinaryRedirectHandler(HTTPRedirectHandler):
               def redirect_request(self, req, fp, code, msg, headers, newurl):
                   validate_url(newurl)
-                  return super().redirect_request(req, fp, code, msg, headers, newurl)
+                  return super().redirect_request(
+                      req, fp, code, msg, headers, newurl
+                  )
 
           destination = Path("data/california_housing.csv")
           destination.parent.mkdir(parents=True, exist_ok=True)
           temporary_path = None
+
           try:
               request = Request(
-                  dataset_url, headers={"User-Agent": "deploy-ml-github-actions"}
+                  dataset_url,
+                  headers={"User-Agent": "deploy-ml-github-actions"}
               )
+
               opener = build_opener(CloudinaryRedirectHandler)
+
               with opener.open(request, timeout=30) as response:
                   with tempfile.NamedTemporaryFile(
-                      dir=destination.parent, delete=False
+                      dir=destination.parent,
+                      delete=False
                   ) as downloaded:
                       temporary_path = Path(downloaded.name)
                       size = 0
+
                       while chunk := response.read(1024 * 1024):
                           size += len(chunk)
+
                           if size > 100 * 1024 * 1024:
-                              raise ValueError("Dataset exceeds the 100 MiB download limit.")
+                              raise ValueError(
+                                  "Dataset exceeds the 100 MiB download limit."
+                              )
+
                           downloaded.write(chunk)
 
               required_columns = {
@@ -112,32 +136,47 @@ jobs:
                   "median_income",
                   "median_house_value",
               }
+
               dataset = pd.read_csv(temporary_path)
               missing_columns = required_columns.difference(dataset.columns)
+
               if missing_columns:
                   raise ValueError(
                       "Downloaded file is not a compatible California Housing CSV; "
                       f"missing columns: {', '.join(sorted(missing_columns))}."
                   )
-              numeric_columns = required_columns
+
               if any(
                   not pd.api.types.is_numeric_dtype(dataset[column])
-                  for column in numeric_columns
+                  for column in required_columns
               ):
-                  raise ValueError("Required feature and target columns must be numeric.")
+                  raise ValueError(
+                      "Required feature and target columns must be numeric."
+                  )
+
               if len(dataset.dropna()) < 2:
                   raise ValueError(
                       "Dataset must contain at least two complete rows for training."
                   )
 
               temporary_path.replace(destination)
-              with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+
+              with open(
+                  os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8"
+              ) as output:
                   output.write(f"image_tag={image_tag}\n")
-              print(f"Validated and installed dispatch dataset ({len(dataset)} rows).")
+
+              print(
+                  f"Validated and installed dispatch dataset "
+                  f"({len(dataset)} rows)."
+              )
+
           except HTTPError as error:
               raise RuntimeError(
-                  f"Cloudinary returned HTTP {error.code} while downloading the dataset."
+                  f"Cloudinary returned HTTP {error.code} "
+                  "while downloading the dataset."
               ) from error
+
           finally:
               if temporary_path is not None:
                   temporary_path.unlink(missing_ok=True)
@@ -146,6 +185,36 @@ jobs:
       - name: Train model
         run: python model/train.py
 
+      - name: Verify trained model
+        run: |
+          python - <<'PY'
+          import joblib
+          import math
+          import pandas as pd
+
+          model = joblib.load("model/model.joblib")
+
+          features = pd.DataFrame([{
+              "longitude": -122.23,
+              "latitude": 37.88,
+              "housing_median_age": 41,
+              "total_rooms": 880,
+              "total_bedrooms": 129,
+              "population": 322,
+              "households": 126,
+              "median_income": 8.33
+          }])
+
+          prediction = float(model.predict(features)[0])
+
+          if not math.isfinite(prediction):
+              raise ValueError(
+                  "The trained model returned a non-finite prediction."
+              )
+
+          print(f"Prediction verified: {prediction}")
+          PY
+
       - name: Check Docker Hub credentials
         id: docker_credentials
         env:
@@ -153,18 +222,61 @@ jobs:
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
           MODEL_NAME: ${{ secrets.MODEL_NAME }}
         run: |
-          if [ -n "$DOCKER_USER" ] && [ -n "$DOCKER_PASSWORD" ] && [ -n "$MODEL_NAME" ]; then
+          if [ -n "$DOCKER_USER" ] && \
+             [ -n "$DOCKER_PASSWORD" ] && \
+             [ -n "$MODEL_NAME" ]; then
             printf 'available=true\n' >> "$GITHUB_OUTPUT"
           else
             printf 'available=false\n' >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Require publishing credentials
+        if: github.event_name != 'pull_request' && steps.docker_credentials.outputs.available != 'true'
+        run: |
+          echo "::error::Docker Hub credentials are missing."
+          echo "Configure DOCKER_USER, DOCKER_PASSWORD and MODEL_NAME."
+          exit 1
+
       - name: Build Docker image
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && steps.docker_credentials.outputs.available == 'true'
         env:
-          IMAGE_NAME: ${{ secrets.DOCKER_USER }}/${{ secrets.MODEL_NAME }}
           IMAGE_TAG: ${{ github.event_name == 'repository_dispatch' && steps.dataset.outputs.image_tag || github.sha }}
-        run: docker build --tag "${IMAGE_NAME}:${IMAGE_TAG}" .
+        run: |
+          docker build \
+            --platform linux/amd64 \
+            --tag "california-housing-ml:${IMAGE_TAG}" \
+            .
+
+      - name: Verify prediction in Docker image
+        env:
+          IMAGE_TAG: ${{ github.event_name == 'repository_dispatch' && steps.dataset.outputs.image_tag || github.sha }}
+        run: |
+          docker run --rm "california-housing-ml:${IMAGE_TAG}" python - <<'PY'
+          import joblib
+          import math
+          import pandas as pd
+
+          model = joblib.load("model/model.joblib")
+
+          features = pd.DataFrame([{
+              "longitude": -122.23,
+              "latitude": 37.88,
+              "housing_median_age": 41,
+              "total_rooms": 880,
+              "total_bedrooms": 129,
+              "population": 322,
+              "households": 126,
+              "median_income": 8.33
+          }])
+
+          prediction = float(model.predict(features)[0])
+
+          if not math.isfinite(prediction):
+              raise ValueError(
+                  "The Docker model returned a non-finite prediction."
+              )
+
+          print(f"Container prediction verified: {prediction}")
+          PY
 
       - name: Log in to Docker Hub
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && steps.docker_credentials.outputs.available == 'true'
@@ -178,4 +290,9 @@ jobs:
         env:
           IMAGE_NAME: ${{ secrets.DOCKER_USER }}/${{ secrets.MODEL_NAME }}
           IMAGE_TAG: ${{ github.event_name == 'repository_dispatch' && steps.dataset.outputs.image_tag || github.sha }}
-        run: docker push "${IMAGE_NAME}:${IMAGE_TAG}"
+        run: |
+          docker tag \
+            "california-housing-ml:${IMAGE_TAG}" \
+            "${IMAGE_NAME}:${IMAGE_TAG}"
+
+          docker push "${IMAGE_NAME}:${IMAGE_TAG}"

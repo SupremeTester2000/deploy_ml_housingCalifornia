@@ -49,7 +49,7 @@ train_X, val_X, train_y, val_y = train_test_split(
 
 
 # Definir el modelo XGBoost
-my_model = XGBRegressor()
+my_model = XGBRegressor(device="cpu")
 
 
 # Entrenar el modelo
